@@ -7,6 +7,9 @@ import { ShoppingListService } from '../shopping-list/shopping-list.service';
 
 @Injectable()
 export class RecipeService {
+  // cancelSubscriptions() {
+  //   throw new Error("Method not implemented.");
+  // }
   recipesChanged = new Subject<Recipe[]>();
 
   // private recipes: Recipe[] = [

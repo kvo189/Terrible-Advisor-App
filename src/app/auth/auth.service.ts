@@ -1,10 +1,13 @@
-import { Injectable } from '@angular/core';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Router } from '@angular/router';
-import { catchError, tap } from 'rxjs/operators';
-import { throwError, BehaviorSubject } from 'rxjs';
+import { Injectable } from "@angular/core";
+import { HttpClient, HttpErrorResponse } from "@angular/common/http";
+import { Router } from "@angular/router";
+import { catchError, tap } from "rxjs/operators";
+import { throwError, BehaviorSubject, Subject } from "rxjs";
+import { AngularFireAuth } from "@angular/fire/auth/";
 
-import { User } from './user.model';
+import { User } from "./user.model";
+import { AuthData } from "./auth-data.model";
+import { RecipeService } from "../recipes/recipe.service";
 
 export interface AuthResponseData {
   kind: string;
@@ -16,129 +19,181 @@ export interface AuthResponseData {
   registered?: boolean;
 }
 
-@Injectable({ providedIn: 'root' })
+@Injectable({ providedIn: "root" })
 export class AuthService {
-  user = new BehaviorSubject<User>(null);
+  // user = new BehaviorSubject<User>(null);
+  authChange = new Subject<boolean>();
   private tokenExpirationTimer: any;
+  private isAuthenticated: boolean = false;
 
-  constructor(private http: HttpClient, private router: Router) {}
+  constructor(
+    private http: HttpClient,
+    private router: Router,
+    private afAuth: AngularFireAuth,
+    private recipeService: RecipeService,
+  ) {}
 
-  signup(email: string, password: string) {
-    return this.http
-      .post<AuthResponseData>(
-        'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyCAwfqCo37eDax2YVRWD2CTdHfNg_3EwJU',
-        {
-          email: email,
-          password: password,
-          returnSecureToken: true
-        }
-      )
-      .pipe(
-        catchError(this.handleError),
-        tap(resData => {
-          this.handleAuthentication(
-            resData.email,
-            resData.localId,
-            resData.idToken,
-            +resData.expiresIn
-          );
-        })
-      );
+  initAuthListener() {
+    this.afAuth.authState.subscribe(user => {
+      if (user) {
+        this.isAuthenticated = true;
+        this.authChange.next(true);
+        this.router.navigate(['/recipes']);
+      } else {
+        // this.recipeService.cancelSubscriptions();
+        this.authChange.next(false);
+        this.router.navigate(['/auth']);
+        this.isAuthenticated = false;
+      }
+    });
   }
 
-  login(email: string, password: string) {
-    return this.http
-      .post<AuthResponseData>(
-        'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaSyCAwfqCo37eDax2YVRWD2CTdHfNg_3EwJU',
-        {
-          email: email,
-          password: password,
-          returnSecureToken: true
-        }
-      )
-      .pipe(
-        catchError(this.handleError),
-        tap(resData => {
-          this.handleAuthentication(
-            resData.email,
-            resData.localId,
-            resData.idToken,
-            +resData.expiresIn
-          );
-        })
-      );
+  // signup(email: string, password: string) {
+  //   return this.http
+  //     .post<AuthResponseData>(
+  //       "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyCAwfqCo37eDax2YVRWD2CTdHfNg_3EwJU",
+  //       {
+  //         email: email,
+  //         password: password,
+  //         returnSecureToken: true,
+  //       }
+  //     )
+  //     .pipe(
+  //       catchError(this.handleError),
+  //       tap((resData) => {
+  //         this.handleAuthentication(
+  //           resData.email,
+  //           resData.localId,
+  //           resData.idToken,
+  //           +resData.expiresIn
+  //         );
+  //       })
+  //     );
+  // }
+
+  registerUser(authData: AuthData) {
+    this.afAuth
+      .createUserWithEmailAndPassword(authData.email, authData.password)
+      .then(result => {
+      })
+      .catch(error => {
+        console.log(error);
+      });
   }
 
-  autoLogin() {
-    const userData: {
-      email: string;
-      id: string;
-      _token: string;
-      _tokenExpirationDate: string;
-    } = JSON.parse(localStorage.getItem('userData'));
-    if (!userData) {
-      return;
-    }
-
-    const loadedUser = new User(
-      userData.email,
-      userData.id,
-      userData._token,
-      new Date(userData._tokenExpirationDate)
-    );
-
-    if (loadedUser.token) {
-      this.user.next(loadedUser);
-      const expirationDuration =
-        new Date(userData._tokenExpirationDate).getTime() -
-        new Date().getTime();
-      this.autoLogout(expirationDuration);
-    }
+  login(authData: AuthData) {
+    this.afAuth
+      .signInWithEmailAndPassword(authData.email, authData.password)
+      .then(result => {
+        console.log(result);
+      })
+      .catch(error => {
+        console.log(error);
+      });
   }
 
   logout() {
-    this.user.next(null);
-    this.router.navigate(['/auth']);
-    localStorage.removeItem('userData');
-    if (this.tokenExpirationTimer) {
-      clearTimeout(this.tokenExpirationTimer);
-    }
-    this.tokenExpirationTimer = null;
+    this.afAuth.signOut();
   }
 
-  autoLogout(expirationDuration: number) {
-    this.tokenExpirationTimer = setTimeout(() => {
-      this.logout();
-    }, expirationDuration);
-  }
+  // login(email: string, password: string) {
+  //   return this.http
+  //     .post<AuthResponseData>(
+  //       "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaSyCAwfqCo37eDax2YVRWD2CTdHfNg_3EwJU",
+  //       {
+  //         email: email,
+  //         password: password,
+  //         returnSecureToken: true,
+  //       }
+  //     )
+  //     .pipe(
+  //       catchError(this.handleError),
+  //       tap((resData) => {
+  //         this.handleAuthentication(
+  //           resData.email,
+  //           resData.localId,
+  //           resData.idToken,
+  //           +resData.expiresIn
+  //         );
+  //       })
+  //     );
+  // }
 
-  private handleAuthentication(
-    email: string,
-    userId: string,
-    token: string,
-    expiresIn: number
-  ) {
-    const expirationDate = new Date(new Date().getTime() + expiresIn * 1000);
-    const user = new User(email, userId, token, expirationDate);
-    this.user.next(user);
-    this.autoLogout(expiresIn * 1000);
-    localStorage.setItem('userData', JSON.stringify(user));
+  // autoLogin() {
+  //   const userData: {
+  //     email: string;
+  //     id: string;
+  //     _token: string;
+  //     _tokenExpirationDate: string;
+  //   } = JSON.parse(localStorage.getItem("userData"));
+  //   if (!userData) {
+  //     return;
+  //   }
+
+  //   const loadedUser = new User(
+  //     userData.email,
+  //     userData.id,
+  //     userData._token,
+  //     new Date(userData._tokenExpirationDate)
+  //   );
+
+  //   if (loadedUser.token) {
+  //     this.user.next(loadedUser);
+  //     const expirationDuration =
+  //       new Date(userData._tokenExpirationDate).getTime() -
+  //       new Date().getTime();
+  //     this.autoLogout(expirationDuration);
+  //   }
+  // }
+
+  // logout() {
+  //   this.user.next(null);
+  //   this.router.navigate(["/auth"]);
+  //   localStorage.removeItem("userData");
+  //   if (this.tokenExpirationTimer) {
+  //     clearTimeout(this.tokenExpirationTimer);
+  //   }
+  //   this.tokenExpirationTimer = null;
+  // }
+
+  // autoLogout(expirationDuration: number) {
+  //   this.tokenExpirationTimer = setTimeout(() => {
+  //     this.logout();
+  //   }, expirationDuration);
+  // }
+
+  // private handleAuthentication(
+  //   email: string,
+  //   userId: string,
+  //   token: string,
+  //   expiresIn: number
+  // ) {
+  //   const expirationDate = new Date(new Date().getTime() + expiresIn * 1000);
+  //   const user = new User(email, userId, token, expirationDate);
+  //   this.user.next(user);
+  //   this.autoLogout(expiresIn * 1000);
+  //   localStorage.setItem("userData", JSON.stringify(user));
+  // }
+
+
+  isAuth() {
+    return this.isAuthenticated;
   }
 
   private handleError(errorRes: HttpErrorResponse) {
-    let errorMessage = 'An unknown error occurred!';
+    let errorMessage = "An unknown error occurred!";
     if (!errorRes.error || !errorRes.error.error) {
       return throwError(errorMessage);
     }
     switch (errorRes.error.error.message) {
-      case 'EMAIL_EXISTS':
-        errorMessage = 'This email exists already';
+      case "EMAIL_EXISTS":
+        errorMessage = "This email exists already";
         break;
-      case 'EMAIL_NOT_FOUND':
-        errorMessage = 'This email does not exist.';
+      case "EMAIL_NOT_FOUND":
+        errorMessage = "This email does not exist.";
         break;
-      case 'INVALID_PASSWORD':
-        errorMessage = 'This password is not correct.';
+      case "INVALID_PASSWORD":
+        errorMessage = "This password is not correct.";
         break;
     }
     return throwError(errorMessage);

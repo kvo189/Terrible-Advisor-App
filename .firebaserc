@@ -1,0 +1,11 @@
+{
+  "targets": {
+    "ng-practice-terrible-advisor": {
+      "hosting": {
+        "ng-complete-guide-update": [
+          "ng-practice-terrible-advisor"
+        ]
+      }
+    }
+  }
+}
